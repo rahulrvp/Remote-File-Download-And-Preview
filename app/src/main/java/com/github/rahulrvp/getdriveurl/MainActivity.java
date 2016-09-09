@@ -1,5 +1,6 @@
 package com.github.rahulrvp.getdriveurl;
 
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -19,14 +20,19 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+import io.github.rahulrvp.drive_file_downloader.DriveFileDownloader;
+
 public class MainActivity extends AppCompatActivity {
 
     private DriveListAdapter mAdapter;
+    private Context mContext;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        mContext = this;
 
         ListView listView = (ListView) findViewById(R.id.drive_item_list);
         if (listView != null) {
@@ -68,12 +74,18 @@ public class MainActivity extends AppCompatActivity {
 
             final Uri sourceUri = data.getData();
 
+            String fileName = DriveFileDownloader.getFileNameFromUri(this, data.getData());
+
+            String externalDirPath = DriveFileDownloader.getPublicAppFolderPath(getString(R.string.app_name));
+
+            final String destinationPath = externalDirPath + File.separator + fileName;
+
             // option 1: download to a file
             new Thread(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        writeToFile(sourceUri);
+                        DriveFileDownloader.downloadFile(mContext, sourceUri, destinationPath);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -92,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
         DriveItem item = new DriveItem();
 
         if (uri != null) {
-            item.setName(getFileNameFromUri(uri));
+            item.setName(DriveFileDownloader.getFileNameFromUri(this, uri));
             item.setContentUri(uri);
 
             String mime = getContentResolver().getType(uri);
@@ -100,66 +112,5 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return item;
-    }
-
-    private String getFileNameFromUri(Uri uri) {
-        String fileName = null;
-
-        if (uri != null) {
-            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-            if (cursor != null) {
-                if (!cursor.isAfterLast()) {
-                    cursor.moveToFirst();
-
-                    fileName = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
-                }
-
-                cursor.close();
-            }
-        }
-
-        return fileName;
-    }
-
-    private Uri writeToFile(Uri sourceUri) throws IOException {
-        Uri uri = null;
-
-        InputStream inputStream = getContentResolver().openInputStream(sourceUri);
-
-        if (inputStream != null) {
-            String path = getLocalDirName();
-
-            if (path != null) {
-                File outputFile = new File(path + File.separator + getFileNameFromUri(sourceUri));
-
-                FileOutputStream outputStream = new FileOutputStream(outputFile);
-
-                int read;
-                byte[] bytes = new byte[1024];
-
-                while ((read = inputStream.read(bytes)) != -1) {
-                    outputStream.write(bytes, 0, read);
-                }
-
-                uri = Uri.parse("file://" + outputFile.getAbsolutePath());
-            }
-        }
-
-        return uri;
-    }
-
-    private String getLocalDirName() {
-        String path = Environment.getExternalStorageDirectory() + File.separator + getString(R.string.app_name);
-
-        File localDir = new File(path);
-        if (!localDir.exists()) {
-            boolean isSuccess = localDir.mkdirs();
-
-            if (!isSuccess) {
-                path = null;
-            }
-        }
-
-        return path;
     }
 }
